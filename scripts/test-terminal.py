@@ -61,7 +61,12 @@ def wait_for(master, predicate, timeout=5):
 
 
 def selected(output, title):
-    return re.search(r"\x1b\[7;[0-9;]+m[^\x1b]*" + re.escape(title), output) is not None
+    return re.search(r"\x1b\[[0-9;]*48;5;24m[^\x1b]*" + re.escape(title), output) is not None
+
+
+def selected_at(output, title, row):
+    line = re.search(r"\x1b\[" + str(row) + r";1H\x1b\[2K(.*?)(?=\x1b\[\d+;1H|$)", output, re.S)
+    return line is not None and selected(line.group(1), title)
 
 
 def launch(*arguments):
@@ -96,18 +101,19 @@ with tempfile.TemporaryDirectory(prefix="orca-watch-tests-") as temporary:
     directory = Path(temporary)
     bridge = directory / "bridge"
     payload = directory / "snapshot.json"
-    bridge.write_text("#!/usr/bin/env python3\nfrom pathlib import Path\nprint(Path(__file__).with_name('snapshot.json').read_text())\n")
+    bridge.write_text("#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nroot = Path(__file__).parent\nif sys.argv[1:3] == ['terminals', 'focus']:\n    (root / 'focused').write_text(sys.argv[3])\n    print('{}')\nelse:\n    print((root / 'snapshot.json').read_text())\n")
     bridge.chmod(0o700)
     payload.write_text(json.dumps(fixture()))
     process, master, slave, original = launch("--bridge", str(bridge), "--interval", "0.5")
     try:
-        wait_for(master, lambda output: selected(output, "Task B"))
+        initial = wait_for(master, lambda output: selected(output, "Task B"))
+        for column in ["SESSION", "STATE", "AGENT", "PROJECT", "BRANCH", "AGE"]:
+            assert column in initial, f"Missing table column: {column}"
         os.write(master, b"G")
         wait_for(master, lambda output: selected(output, "Task A"))
         payload.write_text(json.dumps(fixture("a")))
-        output = wait_for(master, lambda output: selected(output, "Task A"))
+        output = wait_for(master, lambda output: selected_at(output, "Task A", 7))
         assert not selected(output, "Task B"), "Refresh selected the old row's replacement"
-        assert re.search(r"\x1b\[6;1H[^\x1b]*\x1b\[2K\x1b\[7;", output), "Selected session did not move up"
         os.write(master, b"h")
         wait_for(master, lambda output: "▸ Alpha" in output)
         os.write(master, b"l")
@@ -116,6 +122,23 @@ with tempfile.TemporaryDirectory(prefix="orca-watch-tests-") as temporary:
         output = wait_for(master, lambda output: selected(output, "Task B"))
         os.write(master, b"\x1b")
         wait_for(master, lambda output: "Task A" in output)
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 60, 0, 0))
+        os.kill(process.pid, signal.SIGWINCH)
+        resized = wait_for(master, lambda output: "SESSION" in output and "AGE" in output)
+        assert "MODEL" not in resized and "BRANCH" not in resized, "Secondary columns did not adapt"
+        os.write(master, b"g")
+        wait_for(master, lambda output: selected(output, "▾ Alpha"))
+        os.write(master, b"\x04")
+        wait_for(master, lambda output: selected(output, "Task B"))
+        os.write(master, b"\x15")
+        wait_for(master, lambda output: selected(output, "▾ Alpha"))
+        os.write(master, b"\x1b[6~")
+        wait_for(master, lambda output: selected(output, "Task B"))
+        os.write(master, b"gj\r")
+        deadline = time.monotonic() + 3
+        while not (directory / "focused").exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert (directory / "focused").read_text() == "a", "Focus used the selection from before this input batch"
         os.kill(process.pid, signal.SIGTERM)
     finally:
         finish(process, master, slave, original)
@@ -142,4 +165,4 @@ snapshot = subprocess.run([str(BINARY), "snapshot", "--demo"], check=True, captu
 assert len(json.loads(snapshot.stdout)["sessions"]) == 5
 events = subprocess.run([str(BINARY), "log", "--demo", "--json", "--once"], check=True, capture_output=True)
 assert [json.loads(line)["kind"] for line in events.stdout.splitlines()] == ["opened"] * 5
-print("Terminal acceptance passed: reorder selection, collapse, filter, signal restoration, child cleanup, snapshot and log.")
+print("Terminal acceptance passed: table columns, reorder selection, collapse, filter, resize, paging, exact focus, signal restoration, child cleanup, snapshot and log.")

@@ -3,7 +3,8 @@ import Foundation
 import OrcaWatchCore
 
 enum Key: Equatable {
-  case up, down, left, right, enter, escape, backspace
+  case up, down, left, right, enter, escape, backspace, pageUp, pageDown, halfPageUp, halfPageDown,
+    home, end, redraw
   case character(String)
   case quit
 }
@@ -13,10 +14,7 @@ final class Terminal {
   private var previous: [String] = []
   private var input: [UInt8] = []
   private var escapeSince: Date?
-  let color: Bool
-
-  init(color: Bool) throws {
-    self.color = color
+  init() throws {
     guard isatty(STDIN_FILENO) == 1, isatty(STDOUT_FILENO) == 1,
       ProcessInfo.processInfo.environment["TERM"] != "dumb"
     else {
@@ -59,8 +57,21 @@ final class Terminal {
     var keys: [Key] = []
     while let first = input.first {
       if first == 27 {
+        if input.count >= 3, input[1] == 91, (48...57).contains(input[2]) {
+          if input.count < 4 {
+            if escapeSince == nil { escapeSince = Date() }
+            if Date().timeIntervalSince(escapeSince!) < 0.08 { break }
+          } else if input[3] == 126 {
+            let key: Key? = [49: .home, 52: .end, 53: .pageUp, 54: .pageDown, 55: .home, 56: .end][
+              input[2]]
+            input.removeFirst(4)
+            escapeSince = nil
+            if let key { keys.append(key) }
+            continue
+          }
+        }
         if input.count >= 3, input[1] == 91 || input[1] == 79 {
-          let key: Key? = [65: .up, 66: .down, 67: .right, 68: .left][input[2]]
+          let key: Key? = [65: .up, 66: .down, 67: .right, 68: .left, 72: .home, 70: .end][input[2]]
           input.removeFirst(3)
           escapeSince = nil
           if let key { keys.append(key) }
@@ -77,7 +88,10 @@ final class Terminal {
       }
       input.removeFirst()
       switch first {
-      case 3, 4: keys.append(.quit)
+      case 3: keys.append(.quit)
+      case 4: keys.append(.halfPageDown)
+      case 21: keys.append(.halfPageUp)
+      case 12: keys.append(.redraw)
       case 10, 13: keys.append(.enter)
       case 8, 127: keys.append(.backspace)
       case 32...126: keys.append(.character(String(UnicodeScalar(first))))
@@ -100,28 +114,6 @@ final class Terminal {
   }
 
   func invalidate() { previous = [] }
-
-  func style(_ text: String, _ code: String) -> String {
-    color ? "\u{1B}[\(code)m\(text)\u{1B}[0m" : text
-  }
-
-  func projectStyle(_ text: String, id: String, selected: Bool) -> String {
-    let colors = [80, 111, 183, 215, 211, 150]
-    return style(text, "\(selected ? "7;" : "")38;5;\(colors[ProjectColor.index(for: id)])")
-  }
-
-  func fit(_ text: String, width: Int) -> String {
-    var used = 0
-    var result = ""
-    for character in DisplayText.clean(text) {
-      let cells = max(
-        1, character.unicodeScalars.map { max(0, Int(wcwidth(Int32($0.value)))) }.max() ?? 1)
-      if used + cells > width { break }
-      result.append(character)
-      used += cells
-    }
-    return result + String(repeating: " ", count: max(0, width - used))
-  }
 
   private func write(_ value: String) { FileHandle.standardOutput.write(Data(value.utf8)) }
 }

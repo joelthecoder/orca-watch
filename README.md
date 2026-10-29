@@ -6,6 +6,10 @@
 
 Recent activity rises to the top. Selection stays with the session as it moves. Projects have stable colors, nest their sessions, and collapse with a key. Switch to a flat view for a single global activity order.
 
+The terminal uses a full-width table with aligned session, state, agent, project, branch, model and age columns. Session titles take the remaining width. Secondary columns disappear in narrower windows, with clipped cells marked by an ellipsis. A full-row cursor, project rails, status symbols and a bottom detail strip keep the view scannable. The design draws from [tig](https://github.com/jonas/tig) and the terminal references recorded in [the design notes](docs/terminal-design.md).
+
+![Orca Watch terminal table using synthetic demo sessions](docs/images/terminal.png)
+
 ## Terminal
 
 Requires macOS 14+, Swift 6+ and an installed `orca-bridge`. Orca must be running for live inventory. No pairing, additional credentials or Bridge recorder service is required.
@@ -25,6 +29,10 @@ orca-watch log --once
 | `h` / `l`, left / right | Collapse / expand selected project |
 | Space | Toggle selected project |
 | `g` / `G` | First / last row |
+| Ctrl-U / Ctrl-D | Half a page up / down |
+| Page Up / Page Down | One page up / down |
+| Home / End | First / last row |
+| Ctrl-L | Redraw the screen |
 | `f` | Toggle grouped / flat activity order |
 | `/` | Filter project, title, agent and branch; Enter applies |
 | Escape | Clear filter |
@@ -80,7 +88,7 @@ make previews    # Render synthetic widget cards for visual inspection
 make icons       # Rebuild ICNS and Orca PNGs from SVG (requires librsvg)
 ```
 
-`Sources/OrcaWatchCore` owns decoding, projection, sorting, selection, subprocess handling and cache encoding. `Sources/OrcaWatchCLI` owns terminal interaction. `App`, `Widget` and `Shared` provide the native surfaces. Tests use synthetic data; live smoke results never become fixtures.
+`Sources/OrcaWatchCore` owns decoding, projection, sorting, selection, subprocess handling and cache encoding. `Sources/OrcaWatchTerminal` owns cell-aware table layout and rendering. `Sources/OrcaWatchCLI` owns terminal interaction. `App`, `Widget` and `Shared` provide the native surfaces. Tests use synthetic data; live smoke results never become fixtures.
 
 Artwork lives in [Assets](Assets/BrandGuidelines.md). The checked-in PNGs and ICNS are intentional shipping exports. Apply the project icon through Bridge:
 

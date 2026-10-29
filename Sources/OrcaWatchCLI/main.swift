@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import OrcaWatchCore
+import OrcaWatchTerminal
 
 enum CLIError: Error, LocalizedError {
   case message(String)
@@ -120,7 +121,8 @@ func run(_ options: Options) throws {
     } while !interrupted
     return
   }
-  let terminal = try Terminal(color: options.color)
+  let terminal = try Terminal()
+  let screen = ActivityScreen(color: options.color)
   defer { terminal.restore() }
   var navigation = NavigationState()
   var snapshot: ActivitySnapshot?
@@ -157,69 +159,14 @@ func run(_ options: Options) throws {
       terminal.invalidate()
       previousSize = (size.width, size.height)
     }
-    let capacity = max(1, size.height - 9)
-    let selectedIndex = navigation.rows.firstIndex { $0.id == navigation.selectedID } ?? 0
-    if selectedIndex < viewport { viewport = selectedIndex }
-    if selectedIndex >= viewport + capacity { viewport = selectedIndex - capacity + 1 }
-    viewport = max(0, min(viewport, max(0, navigation.rows.count - capacity)))
-    var lines = [
-      terminal.style(
-        terminal.fit(
-          "  ◉ ORCA WATCH                                     \(options.demo ? "DEMO" : "LOCAL")",
-          width: size.width - 1), "1;38;5;80"), "",
-    ]
-    let count = snapshot?.sessions.count ?? 0
-    let freshness = snapshot.map { DisplayText.age($0.capturedAt) } ?? "unknown"
-    lines += [
-      terminal.style(
-        terminal.fit(
-          "  \(count) open agents  ·  newest activity first  ·  synced \(freshness) ago\(paused ? "  ·  PAUSED" : "")",
-          width: size.width - 1), "2"), "",
-    ]
-    for index in viewport..<min(navigation.rows.count, viewport + capacity) {
-      let row = navigation.rows[index]
-      let selected = row.id == navigation.selectedID
-      let prefix = selected ? "› " : "  "
-      let text: String
-      if let session = row.session {
-        let indent = navigation.grouped ? "  " : "\(session.project) / "
-        let age = DisplayText.age(session.activityAt)
-        text = "\(prefix)\(indent)\(session.title)  ·  \(session.agent)  [\(session.state)]  \(age)"
-      } else {
-        text =
-          "\(prefix)\(navigation.collapsed.contains(row.projectID) ? "▸" : "▾") \(row.project)  \(row.count)"
-      }
-      lines.append(
-        terminal.projectStyle(
-          terminal.fit(text, width: size.width - 1), id: row.projectID, selected: selected))
-    }
-    if navigation.rows.isEmpty {
-      lines.append(
-        terminal.fit(
-          snapshot == nil ? "  Waiting for Bridge..." : "  No matching open agents",
-          width: size.width - 1))
-    }
-    while lines.count < size.height - 5 { lines.append("") }
-    let selected = navigation.rows.first { $0.id == navigation.selectedID }?.session
-    let detail =
-      selected.map {
-        "  \($0.agent) · \($0.model ?? "model unknown") · \($0.branch ?? "branch unknown")"
-      } ?? "  Select a session to inspect it"
-    lines.append(terminal.style(terminal.fit(detail, width: size.width - 1), "2"))
-    lines.append(
-      terminal.fit(filtering ? "  /\(navigation.filter)" : "  \(status)", width: size.width - 1))
-    lines.append("")
-    lines.append(
-      terminal.style(
-        terminal.fit(
-          "  j/k move  h/l fold  space toggle  g/G ends  f flat  / filter", width: size.width - 1),
-        "2"))
-    lines.append(
-      terminal.style(
-        terminal.fit(
-          "  enter focus  p pause  r refresh  esc clear filter  q quit", width: size.width - 1), "2"
-      ))
-    terminal.paint(Array(lines.prefix(size.height)))
+    let frame = screen.render(
+      ScreenState(
+        navigation: navigation, snapshot: snapshot, status: status,
+        filtering: filtering, paused: paused, refreshing: refreshing,
+        demo: options.demo, interval: options.interval),
+      width: size.width - 1, height: size.height, viewport: viewport)
+    viewport = frame.viewport
+    terminal.paint(frame.lines)
     for key in terminal.readKeys() {
       if key == .quit {
         interrupted = true
@@ -241,11 +188,16 @@ func run(_ options: Options) throws {
       switch key {
       case .up, .character("k"): navigation.move(-1)
       case .down, .character("j"): navigation.move(1)
+      case .pageUp: navigation.move(-frame.capacity)
+      case .pageDown: navigation.move(frame.capacity)
+      case .halfPageUp: navigation.move(-max(1, frame.capacity / 2))
+      case .halfPageDown: navigation.move(max(1, frame.capacity / 2))
+      case .redraw: terminal.invalidate()
       case .left, .character("h"): navigation.toggleProject(expand: false)
       case .right, .character("l"): navigation.toggleProject(expand: true)
       case .character(" "): navigation.toggleProject()
-      case .character("g"): navigation.move(-navigation.rows.count)
-      case .character("G"): navigation.move(navigation.rows.count)
+      case .home, .character("g"): navigation.move(-navigation.rows.count)
+      case .end, .character("G"): navigation.move(navigation.rows.count)
       case .character("f"):
         navigation.grouped.toggle()
         navigation.rebuild()
@@ -257,7 +209,9 @@ func run(_ options: Options) throws {
         navigation.rebuild()
       case .character("q"): interrupted = true
       case .enter:
-        if let selected, !options.demo {
+        if let selected = navigation.rows.first(where: { $0.id == navigation.selectedID })?.session,
+          !options.demo
+        {
           do {
             try client?.focus(selected)
             status = "Focused \(selected.title)"
@@ -286,6 +240,7 @@ do {
       --no-color   Disable terminal colors (also honors NO_COLOR)
 
       j/k or arrows move; h/l collapse/expand; space toggles a project.
+      Ctrl-U/Ctrl-D move half a page; Page Up/Down move a page; Ctrl-L redraws.
       f toggles flat order; / filters; enter focuses; p pauses; q quits.
       Selection follows identity across reorder. The widget uses an invisible collector.
       """)

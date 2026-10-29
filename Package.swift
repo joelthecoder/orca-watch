@@ -10,8 +10,10 @@ let package = Package(
   ],
   targets: [
     .target(name: "OrcaWatchCore"),
-    .executableTarget(name: "OrcaWatchCLI", dependencies: ["OrcaWatchCore"]),
+    .target(name: "OrcaWatchTerminal", dependencies: ["OrcaWatchCore"]),
+    .executableTarget(name: "OrcaWatchCLI", dependencies: ["OrcaWatchCore", "OrcaWatchTerminal"]),
     .testTarget(name: "OrcaWatchCoreTests", dependencies: ["OrcaWatchCore"]),
+    .testTarget(name: "OrcaWatchTerminalTests", dependencies: ["OrcaWatchTerminal"]),
   ],
   swiftLanguageModes: [.v5]
 )
