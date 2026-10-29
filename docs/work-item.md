@@ -41,7 +41,7 @@ Swift LSP navigation is not exposed by this tool interface. Contracts were inspe
 - [x] App and widget build
 - [x] Artwork and Orca icon
 - [x] Documentation and local review
-- [ ] Initial private publication
+- [x] Initial private publication
 
 ## Evidence
 
@@ -56,3 +56,4 @@ Swift LSP navigation is not exposed by this tool interface. Contracts were inspe
 - Orca project PNG applied through Bridge with an acknowledged `applied: true` result. Display name and badge color were read back after their narrow settings patch.
 - Native deep-link retry brought this task's exact live session into focus in Orca, verified in the Orca window. URL parsing also has synthetic round-trip and malformed-route coverage.
 - General Swift code review covered liveness evidence, selection, process cancellation, shared cache, URL handling and helper lifecycle. No repository-specific Rails review skill exists in this new Swift repository.
+- Initial implementation committed as `87aaaf5` and pushed to private `joelthecoder/orca-watch` on `main`. GitHub REST read-back confirmed private visibility.
