@@ -1,0 +1,9 @@
+.build/
+.build-app/
+.DS_Store
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+.env
+.env.*
+output/

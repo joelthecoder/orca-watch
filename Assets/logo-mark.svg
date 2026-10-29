@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="orca-watch-mark" viewBox="160 180 704 660" role="graphics-document document" aria-labelledby="mark-title" aria-describedby="mark-description">
+  <title id="mark-title">Orca Watch</title>
+  <desc id="mark-description">An orca dorsal silhouette inside an open mint observation ring, with a wake below.</desc>
+  <g id="layer-observation" role="graphics-object group" aria-labelledby="observation-title" aria-describedby="observation-description">
+    <title id="observation-title">Observation ring</title>
+    <desc id="observation-description">An open circular sweep follows the orca above the water.</desc>
+    <path d="M286 699 A294 294 0 1 1 758 689" fill="none" stroke="#59D8C6" stroke-width="62" stroke-linecap="round"/>
+  </g>
+  <g id="layer-orca" role="graphics-object group" aria-labelledby="orca-title" aria-describedby="orca-description">
+    <title id="orca-title">Surfacing orca</title>
+    <desc id="orca-description">A tall swept fin and curved white body carry a dark eye patch.</desc>
+    <path d="M269 641 C348 620 388 558 426 470 C461 389 507 317 562 286 C549 381 561 455 612 513 C655 554 706 578 763 592 C687 653 609 691 512 695 C415 700 328 682 269 641Z" fill="#F4FAF8"/>
+    <path d="M519 577 C545 550 588 547 616 560 C601 586 557 599 526 591Z" fill="#0B202B"/>
+  </g>
+  <g id="layer-wake" role="graphics-object group" aria-labelledby="wake-title" aria-describedby="wake-description">
+    <title id="wake-title">Activity wake</title>
+    <desc id="wake-description">A short horizontal stroke marks the orca's recent passage.</desc>
+    <path d="M422 767 H602" fill="none" stroke="#59D8C6" stroke-width="38" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="orca-watch-icon" viewBox="0 0 1024 1024" role="graphics-document document" aria-labelledby="icon-title" aria-describedby="icon-description">
+  <title id="icon-title">Orca Watch app icon</title>
+  <desc id="icon-description">A white surfacing orca within a mint observation ring on a deep ocean tile.</desc>
+  <defs aria-hidden="true">
+    <linearGradient id="gradient-ocean" x1="0" y1="0" x2="0.8" y2="1">
+      <stop stop-color="#183F4E"/>
+      <stop offset="1" stop-color="#071722"/>
+    </linearGradient>
+  </defs>
+  <g id="layer-background" role="graphics-object group" aria-labelledby="background-title" aria-describedby="background-description">
+    <title id="background-title">Ocean tile</title>
+    <desc id="background-description">A rounded square fades from blue teal into midnight ocean.</desc>
+    <rect width="1024" height="1024" rx="225" fill="url(#gradient-ocean)"/>
+  </g>
+  <g id="layer-observation" role="graphics-object group" aria-labelledby="observation-title" aria-describedby="observation-description">
+    <title id="observation-title">Observation ring</title>
+    <desc id="observation-description">An open circular mint sweep follows the orca.</desc>
+    <path d="M286 699 A294 294 0 1 1 758 689" fill="none" stroke="#59D8C6" stroke-width="62" stroke-linecap="round"/>
+  </g>
+  <g id="layer-orca" role="graphics-object group" aria-labelledby="orca-title" aria-describedby="orca-description">
+    <title id="orca-title">Surfacing orca</title>
+    <desc id="orca-description">A swept white dorsal fin curves into an orca body and eye patch.</desc>
+    <path d="M269 641 C348 620 388 558 426 470 C461 389 507 317 562 286 C549 381 561 455 612 513 C655 554 706 578 763 592 C687 653 609 691 512 695 C415 700 328 682 269 641Z" fill="#F4FAF8"/>
+    <path d="M519 577 C545 550 588 547 616 560 C601 586 557 599 526 591Z" fill="#0B202B"/>
+  </g>
+  <g id="layer-wake" role="graphics-object group" aria-labelledby="wake-title" aria-describedby="wake-description">
+    <title id="wake-title">Activity wake</title>
+    <desc id="wake-description">A mint waterline marks recent motion.</desc>
+    <path d="M422 767 H602" fill="none" stroke="#59D8C6" stroke-width="38" stroke-linecap="round"/>
+  </g>
+</svg>

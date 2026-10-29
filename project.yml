@@ -1,0 +1,80 @@
+name: OrcaWatch
+options:
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  OrcaWatch:
+    path: .
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+    ORCA_WATCH_APP_GROUP: "$(DEVELOPMENT_TEAM).com.joelthecoder.orca-watch"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  OrcaWatch:
+    type: application
+    platform: macOS
+    sources:
+      - App
+      - Shared
+    resources:
+      - path: Assets/AppIcon.icns
+    dependencies:
+      - package: OrcaWatch
+        product: OrcaWatchCore
+      - target: OrcaWatchWidget
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.joelthecoder.orca-watch
+        PRODUCT_NAME: Orca Watch
+    info:
+      path: .build-app/App-Info.plist
+      properties:
+        CFBundleDisplayName: Orca Watch
+        CFBundleIconFile: AppIcon
+        LSApplicationCategoryType: public.app-category.developer-tools
+        LSUIElement: true
+        OrcaWatchAppGroup: "$(ORCA_WATCH_APP_GROUP)"
+        CFBundleURLTypes:
+          - CFBundleURLName: Orca Watch session
+            CFBundleURLSchemes: [orcawatch]
+    entitlements:
+      path: .build-app/App.entitlements
+      properties:
+        com.apple.security.application-groups: ["$(ORCA_WATCH_APP_GROUP)"]
+  OrcaWatchWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Widget
+      - Shared
+    dependencies:
+      - package: OrcaWatch
+        product: OrcaWatchCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.joelthecoder.orca-watch.widget
+        PRODUCT_NAME: OrcaWatchWidget
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+    info:
+      path: .build-app/Widget-Info.plist
+      properties:
+        CFBundleDisplayName: Orca Watch
+        OrcaWatchAppGroup: "$(ORCA_WATCH_APP_GROUP)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: .build-app/Widget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: ["$(ORCA_WATCH_APP_GROUP)"]
+schemes:
+  OrcaWatch:
+    build:
+      targets:
+        OrcaWatch: all
