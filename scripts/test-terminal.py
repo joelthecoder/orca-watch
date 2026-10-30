@@ -118,7 +118,24 @@ with tempfile.TemporaryDirectory(prefix="orca-watch-tests-") as temporary:
     directory = Path(temporary)
     bridge = directory / "bridge"
     payload = directory / "snapshot.json"
-    bridge.write_text("#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nroot = Path(__file__).parent\nif sys.argv[1:3] == ['terminals', 'focus']:\n    (root / 'focused').write_text(sys.argv[3])\n    print('{}')\nelse:\n    print((root / 'snapshot.json').read_text())\n")
+    bridge.write_text("""#!/usr/bin/env python3
+import sys
+import time
+from pathlib import Path
+root = Path(__file__).parent
+if sys.argv[1:3] == ['terminals', 'focus']:
+    (root / 'focus-started').touch()
+    if (root / 'focus-delay').exists():
+        time.sleep(float((root / 'focus-delay').read_text()))
+    (root / 'focused').write_text(sys.argv[3])
+    print('{}')
+else:
+    with (root / 'request-starts').open('a') as starts:
+        starts.write(str(time.monotonic()) + '\\n')
+    if (root / 'snapshot-delay').exists():
+        time.sleep(float((root / 'snapshot-delay').read_text()))
+    print((root / 'snapshot.json').read_text())
+""")
     bridge.chmod(0o700)
     payload.write_text(json.dumps(fixture()))
     process, master, slave, original = launch("--bridge", str(bridge), "--interval", "0.5")
@@ -170,6 +187,41 @@ with tempfile.TemporaryDirectory(prefix="orca-watch-tests-") as temporary:
     finally:
         finish(process, master, slave, original)
 
+    (directory / "focus-started").unlink(missing_ok=True)
+    (directory / "focus-delay").write_text("1.5")
+    process, master, slave, original = launch("--bridge", str(bridge))
+    try:
+        initial = wait_for(master, lambda output: selected(output, "Task A"))
+        os.write(master, b"\r")
+        deadline = time.monotonic() + 2
+        while not (directory / "focus-started").exists() and time.monotonic() < deadline:
+            drain(master, 0.01)
+        assert (directory / "focus-started").exists(), "Focus did not start"
+        started = time.monotonic()
+        os.write(master, b"G")
+        wait_for(master, lambda output: selected(output, "Task B"), timeout=0.4)
+        assert time.monotonic() - started < 0.4, "Slow Bridge focus blocked navigation"
+        assert "5s" in initial, "Default polling interval did not reduce background work"
+    finally:
+        finish(process, master, slave, original)
+        (directory / "focus-delay").unlink()
+
+    (directory / "request-starts").unlink(missing_ok=True)
+    (directory / "snapshot-delay").write_text("0.8")
+    process, master, slave, original = launch("--bridge", str(bridge), "--interval", "0.5")
+    try:
+        wait_for(master, lambda output: selected(output, "Task A"))
+        deadline = time.monotonic() + 3
+        starts = []
+        while len(starts) < 2 and time.monotonic() < deadline:
+            drain(master, 0.05)
+            starts = [float(value) for value in (directory / "request-starts").read_text().splitlines()]
+        assert len(starts) >= 2, "Second snapshot did not start"
+        assert starts[1] - starts[0] >= 1.2, "Slow snapshots caused back-to-back polling"
+    finally:
+        finish(process, master, slave, original)
+        (directory / "snapshot-delay").unlink()
+
     slow = directory / "slow"
     slow.write_text("#!/bin/sh\necho $$ > \"$(dirname \"$0\")/child.pid\"\nexec sleep 30\n")
     slow.chmod(0o700)
@@ -192,4 +244,4 @@ snapshot = subprocess.run([str(BINARY), "snapshot", "--demo"], check=True, captu
 assert len(json.loads(snapshot.stdout)["sessions"]) == 5
 events = subprocess.run([str(BINARY), "log", "--demo", "--json", "--once"], check=True, capture_output=True)
 assert [json.loads(line)["kind"] for line in events.stdout.splitlines()] == ["opened"] * 5
-print("Terminal acceptance passed: table columns, stable projects, selection, collapse, filter, resize, tiny bounds, parked cursor, paging, exact focus, signal restoration, child cleanup, snapshot and log.")
+print("Terminal acceptance passed: table columns, stable projects, selection, collapse, filter, resize, tiny bounds, parked cursor, paging, exact focus, responsive slow focus, spaced slow polls, signal restoration, child cleanup, snapshot and log.")

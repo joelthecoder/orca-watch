@@ -15,7 +15,7 @@ public struct ScreenState {
   public init(
     navigation: NavigationState, snapshot: ActivitySnapshot?, status: String,
     filtering: Bool = false, paused: Bool = false, refreshing: Bool = false,
-    demo: Bool = false, interval: Double = 2, now: Date = Date()
+    demo: Bool = false, interval: Double = 5, now: Date = Date()
   ) {
     self.navigation = navigation
     self.snapshot = snapshot

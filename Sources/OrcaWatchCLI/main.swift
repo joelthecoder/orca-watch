@@ -13,7 +13,7 @@ enum CLIError: Error, LocalizedError {
 
 struct Options {
   var command = "watch"
-  var interval = 2.0
+  var interval = 5.0
   var bridge: String?
   var demo = false
   var once = false
@@ -51,15 +51,15 @@ struct Options {
   }
 }
 
-final class RefreshMailbox {
+final class Mailbox<Value> {
   private let lock = NSLock()
-  private var result: Result<ActivitySnapshot, Error>?
-  func put(_ value: Result<ActivitySnapshot, Error>) {
+  private var result: Value?
+  func put(_ value: Value) {
     lock.lock()
     result = value
     lock.unlock()
   }
-  func take() -> Result<ActivitySnapshot, Error>? {
+  func take() -> Value? {
     lock.lock()
     defer { lock.unlock() }
     let value = result
@@ -131,25 +131,40 @@ func run(_ options: Options) throws {
   var paused = false
   var nextRefresh = Date.distantPast
   var refreshing = false
+  var focusing = false
   var viewport = 0
+  var capacity = 1
   var previousSize = (0, 0)
-  let mailbox = RefreshMailbox()
+  var needsRender = true
+  var nextRender = Date.distantPast
+  let mailbox = Mailbox<Result<ActivitySnapshot, Error>>()
+  let focusMailbox = Mailbox<Result<String, Error>>()
   while !interrupted {
     if let result = mailbox.take() {
       refreshing = false
+      nextRefresh = Date().addingTimeInterval(options.interval)
+      needsRender = true
       switch result {
       case .success(let value):
+        if snapshot?.sessions != value.sessions { navigation.update(value.sessions) }
         snapshot = value
-        navigation.update(value.sessions)
         status = value.warning ?? "Bridge connected"
       case .failure(let error): status = "STALE / \(error.localizedDescription)"
       }
     }
+    if let result = focusMailbox.take() {
+      focusing = false
+      needsRender = true
+      switch result {
+      case .success(let title): status = "Focused \(title)"
+      case .failure(let error): status = error.localizedDescription
+      }
+    }
     if !refreshing && !paused && Date() >= nextRefresh {
       refreshing = true
-      nextRefresh = Date().addingTimeInterval(options.interval)
+      needsRender = true
       pending.enter()
-      DispatchQueue.global(qos: .userInitiated).async {
+      DispatchQueue.global(qos: .utility).async {
         defer { pending.leave() }
         mailbox.put(Result { try load() })
       }
@@ -158,20 +173,27 @@ func run(_ options: Options) throws {
     if previousSize != (size.width, size.height) {
       terminal.invalidate()
       previousSize = (size.width, size.height)
+      needsRender = true
     }
-    let frame = screen.render(
-      ScreenState(
-        navigation: navigation, snapshot: snapshot, status: status,
-        filtering: filtering, paused: paused, refreshing: refreshing,
-        demo: options.demo, interval: options.interval),
-      width: size.width - 1, height: size.height, viewport: viewport)
-    viewport = frame.viewport
-    terminal.paint(frame.lines)
+    if needsRender || Date() >= nextRender {
+      let frame = screen.render(
+        ScreenState(
+          navigation: navigation, snapshot: snapshot, status: status,
+          filtering: filtering, paused: paused, refreshing: refreshing,
+          demo: options.demo, interval: options.interval),
+        width: size.width - 1, height: size.height, viewport: viewport)
+      viewport = frame.viewport
+      capacity = frame.capacity
+      terminal.paint(frame.lines)
+      needsRender = false
+      nextRender = Date().addingTimeInterval(1)
+    }
     for key in terminal.readKeys() {
       if key == .quit {
         interrupted = true
         break
       }
+      needsRender = true
       if filtering {
         switch key {
         case .escape:
@@ -188,10 +210,10 @@ func run(_ options: Options) throws {
       switch key {
       case .up, .character("k"): navigation.move(-1)
       case .down, .character("j"): navigation.move(1)
-      case .pageUp: navigation.move(-frame.capacity)
-      case .pageDown: navigation.move(frame.capacity)
-      case .halfPageUp: navigation.move(-max(1, frame.capacity / 2))
-      case .halfPageDown: navigation.move(max(1, frame.capacity / 2))
+      case .pageUp: navigation.move(-capacity)
+      case .pageDown: navigation.move(capacity)
+      case .halfPageUp: navigation.move(-max(1, capacity / 2))
+      case .halfPageDown: navigation.move(max(1, capacity / 2))
       case .redraw: terminal.invalidate()
       case .left, .character("h"): navigation.toggleProject(expand: false)
       case .right, .character("l"): navigation.toggleProject(expand: true)
@@ -210,12 +232,21 @@ func run(_ options: Options) throws {
       case .character("q"): interrupted = true
       case .enter:
         if let selected = navigation.rows.first(where: { $0.id == navigation.selectedID })?.session,
-          !options.demo
+          !options.demo, let client = client
         {
-          do {
-            try client?.focus(selected)
-            status = "Focused \(selected.title)"
-          } catch { status = error.localizedDescription }
+          if !focusing {
+            focusing = true
+            status = "Focusing \(selected.title)…"
+            pending.enter()
+            DispatchQueue.global(qos: .userInitiated).async {
+              defer { pending.leave() }
+              focusMailbox.put(
+                Result {
+                  try client.focus(selected)
+                  return selected.title
+                })
+            }
+          }
         } else {
           navigation.toggleProject()
         }
