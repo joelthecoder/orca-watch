@@ -41,18 +41,46 @@ final class ActivityTests: XCTestCase {
     XCTAssertEqual(try ActivitySnapshot.project(decode(fixture)).sessions, [])
   }
 
-  func testSelectionFollowsSessionWhenActivityReordersProjects() {
+  func testProjectsStayAlphabeticalWhileSessionsReorderByActivity() {
     var navigation = NavigationState()
     let old = row("a", project: "alpha", time: 10)
     let recent = row("b", project: "beta", time: 20)
-    navigation.update([old, recent])
+    let child = row("c", project: "alpha", time: 5)
+    navigation.update([old, recent, child])
+    XCTAssertEqual(navigation.rows.map(\.id), ["project:alpha", "a", "c", "project:beta", "b"])
     navigation.select("a")
-    navigation.update([row("a", project: "alpha", time: 30), recent])
+    navigation.update([recent, row("c", project: "alpha", time: 30), old])
     XCTAssertEqual(navigation.selectedID, "a")
-    XCTAssertEqual(navigation.rows.map(\.id), ["project:alpha", "a", "project:beta", "b"])
-    navigation.update([old, recent])
+    XCTAssertEqual(navigation.rows.map(\.id), ["project:alpha", "c", "a", "project:beta", "b"])
+    navigation.update([child, recent, old])
     XCTAssertEqual(navigation.selectedID, "a")
-    XCTAssertEqual(navigation.rows.last?.id, "a")
+    XCTAssertEqual(navigation.rows.map(\.id), ["project:alpha", "a", "c", "project:beta", "b"])
+  }
+
+  func testProjectOrderSurvivesFilteringFlatModeAndNewNavigationState() {
+    var first = row("a", project: "project-a", time: 10)
+    first.project = "Alpha"
+    var second = row("b", project: "project-b", time: 20)
+    second.project = "alpha"
+    let last = row("c", project: "Beta", time: 30)
+    let sessions = [last, second, first]
+    let expected = ["project:project-a", "a", "project:project-b", "b", "project:Beta", "c"]
+    var navigation = NavigationState()
+    navigation.update(sessions)
+    XCTAssertEqual(navigation.rows.map(\.id), expected)
+    navigation.filter = "Beta"
+    navigation.rebuild()
+    XCTAssertEqual(navigation.rows.map(\.id), ["project:Beta", "c"])
+    navigation.filter = ""
+    navigation.grouped = false
+    navigation.rebuild()
+    XCTAssertEqual(navigation.rows.map(\.id), ["c", "b", "a"])
+    navigation.grouped = true
+    navigation.rebuild()
+    XCTAssertEqual(navigation.rows.map(\.id), expected)
+    navigation = NavigationState()
+    navigation.update(sessions.reversed())
+    XCTAssertEqual(navigation.rows.map(\.id), expected)
   }
 
   func testCollapsePersistsThroughRefreshAndMovementRemainsBounded() {
@@ -63,13 +91,13 @@ final class ActivityTests: XCTestCase {
     navigation.toggleProject(expand: false)
     navigation.update(sessions.reversed())
     XCTAssertEqual(navigation.selectedID, "project:alpha")
-    XCTAssertEqual(navigation.rows.map(\.id), ["project:beta", "b", "project:alpha"])
-    navigation.move(100)
+    XCTAssertEqual(navigation.rows.map(\.id), ["project:alpha", "project:beta", "b"])
+    navigation.move(-100)
     XCTAssertEqual(navigation.selectedID, "project:alpha")
     navigation.toggleProject(expand: true)
-    XCTAssertEqual(navigation.rows.last?.id, "a")
-    navigation.move(-100)
-    XCTAssertEqual(navigation.selectedID, "project:beta")
+    XCTAssertEqual(navigation.rows.map(\.id), ["project:alpha", "a", "project:beta", "b"])
+    navigation.move(100)
+    XCTAssertEqual(navigation.selectedID, "b")
   }
 
   func testFlatModeAndFilterKeepIdentityUntilItIsNoLongerVisible() {

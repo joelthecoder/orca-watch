@@ -42,7 +42,7 @@ final class Terminal {
   var size: (width: Int, height: Int) {
     var dimensions = winsize()
     _ = ioctl(STDOUT_FILENO, TIOCGWINSZ, &dimensions)
-    return (max(20, Int(dimensions.ws_col)), max(6, Int(dimensions.ws_row)))
+    return (max(1, Int(dimensions.ws_col)), max(1, Int(dimensions.ws_row)))
   }
 
   func readKeys() -> [Key] {
@@ -110,7 +110,7 @@ final class Terminal {
       }
     }
     previous = lines
-    if !output.isEmpty { write(output) }
+    if !output.isEmpty { write(output + "\u{1B}[1;1H") }
   }
 
   func invalidate() { previous = [] }

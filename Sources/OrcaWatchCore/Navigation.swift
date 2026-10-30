@@ -63,9 +63,11 @@ public struct NavigationState {
     .sorted(by: ActivitySession.newestFirst)
     if grouped {
       let groups = Dictionary(grouping: visible, by: \.projectID)
-      var seen = Set<String>()
-      rows = visible.flatMap { session -> [ActivityRow] in
-        guard seen.insert(session.projectID).inserted else { return [] }
+      let projects = groups.values.compactMap(\.first).sorted {
+        let order = $0.project.compare($1.project, options: [.caseInsensitive, .numeric])
+        return order == .orderedSame ? $0.projectID < $1.projectID : order == .orderedAscending
+      }
+      rows = projects.flatMap { session -> [ActivityRow] in
         let children = groups[session.projectID] ?? []
         let parent = ActivityRow(
           id: "project:\(session.projectID)", projectID: session.projectID,

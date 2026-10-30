@@ -31,7 +31,8 @@ def fixture(newest="b"):
             "workspaceContexts": [{"projectId": project, "projectName": project}],
         })
         terminals.append({"handle": name, "incarnationId": name, "worktreeId": project, "connected": True})
-        tabs.append({"id": name, "terminal": name, "incarnationId": name, "worktreeId": project})
+        tabs.append({"id": name, "terminal": name, "incarnationId": name, "worktreeId": project,
+                     "agentStatus": {"state": "working" if name == newest else "waiting"}})
     return {"schemaVersion": 1, "capturedAt": "2026-10-29T11:01:00Z", "historyTruncated": False,
             "runtime": resource({"runtimeId": "r"}), "sessions": resource(sessions),
             "projects": resource([]), "repositories": resource([]), "terminals": resource(terminals), "tabs": resource(tabs)}
@@ -55,7 +56,7 @@ def wait_for(master, predicate, timeout=5):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         output += drain(master, 0.1)
-        if predicate(output):
+        if predicate(output) and output.endswith("\x1b[1;1H"):
             return output
     raise AssertionError(f"Terminal condition timed out: {output[-1500:]!r}")
 
@@ -67,6 +68,19 @@ def selected(output, title):
 def selected_at(output, title, row):
     line = re.search(r"\x1b\[" + str(row) + r";1H\x1b\[2K(.*?)(?=\x1b\[\d+;1H|$)", output, re.S)
     return line is not None and selected(line.group(1), title)
+
+
+def assert_cursor_parked(output):
+    assert output.endswith("\x1b[1;1H"), "Redraw left the hidden cursor on a changing row"
+
+
+def assert_paint_bounds(output, width, height):
+    positions = re.findall(r"\x1b\[(\d+);(\d+)H", output)
+    assert positions, "No positioned output found"
+    assert all(1 <= int(row) <= height and 1 <= int(column) <= width for row, column in positions), positions
+    for line in re.findall(r"\x1b\[2K(.*?)(?=\x1b\[\d+;\d+H|$)", output, re.S):
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", line)
+        assert len(plain) < width, f"Redraw exceeded the safe terminal width: {plain!r}"
 
 
 def launch(*arguments):
@@ -83,6 +97,9 @@ def finish(process, master, slave, original):
     try:
         if process.poll() is None:
             os.write(master, b"q")
+        deadline = time.monotonic() + 3
+        while process.poll() is None and time.monotonic() < deadline:
+            drain(master, 0.05)
         process.wait(timeout=3)
         assert process.returncode == 0, process.returncode
         restored = termios.tcgetattr(slave)
@@ -106,14 +123,18 @@ with tempfile.TemporaryDirectory(prefix="orca-watch-tests-") as temporary:
     payload.write_text(json.dumps(fixture()))
     process, master, slave, original = launch("--bridge", str(bridge), "--interval", "0.5")
     try:
-        initial = wait_for(master, lambda output: selected(output, "Task B"))
+        initial = wait_for(master, lambda output: selected(output, "Task A"))
+        assert_cursor_parked(initial)
         for column in ["SESSION", "STATE", "AGENT", "PROJECT", "BRANCH", "AGE"]:
             assert column in initial, f"Missing table column: {column}"
         os.write(master, b"G")
-        wait_for(master, lambda output: selected(output, "Task A"))
+        wait_for(master, lambda output: selected(output, "Task B"))
         payload.write_text(json.dumps(fixture("a")))
-        output = wait_for(master, lambda output: selected_at(output, "Task A", 7))
-        assert not selected(output, "Task B"), "Refresh selected the old row's replacement"
+        output = wait_for(master, lambda output: selected_at(output, "Task B", 9))
+        assert not selected(output, "Task A"), "Refresh selected the old row's replacement"
+        assert_cursor_parked(output)
+        os.write(master, b"gj")
+        wait_for(master, lambda output: selected(output, "Task A"))
         os.write(master, b"h")
         wait_for(master, lambda output: "▸ Alpha" in output)
         os.write(master, b"l")
@@ -139,6 +160,12 @@ with tempfile.TemporaryDirectory(prefix="orca-watch-tests-") as temporary:
         while not (directory / "focused").exists() and time.monotonic() < deadline:
             time.sleep(0.02)
         assert (directory / "focused").read_text() == "a", "Focus used the selection from before this input batch"
+        drain(master)
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 4, 12, 0, 0))
+        os.kill(process.pid, signal.SIGWINCH)
+        tiny = wait_for(master, lambda output: "ORCA" in output)
+        assert_paint_bounds(tiny, width=12, height=4)
+        assert_cursor_parked(tiny)
         os.kill(process.pid, signal.SIGTERM)
     finally:
         finish(process, master, slave, original)
@@ -165,4 +192,4 @@ snapshot = subprocess.run([str(BINARY), "snapshot", "--demo"], check=True, captu
 assert len(json.loads(snapshot.stdout)["sessions"]) == 5
 events = subprocess.run([str(BINARY), "log", "--demo", "--json", "--once"], check=True, capture_output=True)
 assert [json.loads(line)["kind"] for line in events.stdout.splitlines()] == ["opened"] * 5
-print("Terminal acceptance passed: table columns, reorder selection, collapse, filter, resize, paging, exact focus, signal restoration, child cleanup, snapshot and log.")
+print("Terminal acceptance passed: table columns, stable projects, selection, collapse, filter, resize, tiny bounds, parked cursor, paging, exact focus, signal restoration, child cleanup, snapshot and log.")

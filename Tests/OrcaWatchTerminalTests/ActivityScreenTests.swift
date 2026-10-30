@@ -9,7 +9,7 @@ final class ActivityScreenTests: XCTestCase {
     let state = makeState()
     let frame = ActivityScreen(color: false).render(state, width: 159, height: 24)
     let header = frame.lines[3]
-    let session = frame.lines[6]
+    let session = frame.lines.first { $0.contains("Refine the workspace navigator") }!
     for field in ["SESSION", "STATE", "AGENT", "PROJECT", "BRANCH", "MODEL", "AGE"] {
       XCTAssertTrue(header.contains(field), field)
     }

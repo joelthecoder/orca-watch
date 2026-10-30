@@ -4,7 +4,7 @@
 
 **Your agents, in motion.** A Swift terminal dashboard and macOS desktop widget for open [Orca](https://github.com/stablyai/orca) agents. Powered entirely by the [Orca Bridge CLI](https://github.com/joelthecoder/orca-bridge).
 
-Recent activity rises to the top. Selection stays with the session as it moves. Projects have stable colors, nest their sessions, and collapse with a key. Switch to a flat view for a single global activity order.
+Projects stay in alphabetical order, with recent activity rising to the top within each project. Selection stays with the session as it moves. Projects have stable colors, nest their sessions, and collapse with a key. Switch to a flat view for a single global activity order.
 
 The terminal uses a full-width table with aligned session, state, agent, project, branch, model and age columns. Session titles take the remaining width. Secondary columns disappear in narrower windows, with clipped cells marked by an ellipsis. A full-row cursor, project rails, status symbols and a bottom detail strip keep the view scannable. The design draws from [tig](https://github.com/jonas/tig) and the terminal references recorded in [the design notes](docs/terminal-design.md).
 
@@ -41,7 +41,7 @@ orca-watch log --once
 | `r` | Refresh |
 | `q`, Ctrl-C | Quit and restore terminal settings |
 
-`--interval SECONDS` sets snapshot polling, default two seconds, minimum 0.5. The screen updates only changed lines. Input remains responsive during collection. `--no-color` and `NO_COLOR` disable color. JSON never includes ANSI escapes. `snapshot` writes one compact JSON object; `log --json` writes JSONL `opened`, `activity` and `removed` observations. Removed means absent from the next successful live inventory, not proof that a conversation ended. Outages write diagnostics to stderr and do not manufacture removal events.
+`--interval SECONDS` sets snapshot polling, default two seconds, minimum 0.5. The screen updates only changed lines, then parks the hidden terminal cursor at the top left so its resting position stays constant between redraws. Rendering follows the actual terminal size, including very small panes. Input remains responsive during collection. `--no-color` and `NO_COLOR` disable color. JSON never includes ANSI escapes. `snapshot` writes one compact JSON object; `log --json` writes JSONL `opened`, `activity` and `removed` observations. Removed means absent from the next successful live inventory, not proof that a conversation ended. Outages write diagnostics to stderr and do not manufacture removal events.
 
 Use `--bridge /absolute/path/to/orca-bridge` or `ORCA_WATCH_BRIDGE` to select the executable. Otherwise discovery checks PATH, `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`. Install location defaults to `~/.local/bin`; override with `make install INSTALL_DIR=/your/bin`.
 
@@ -74,7 +74,7 @@ Every Orca read and navigation action invokes `orca-bridge`. This project does n
 
 Indexed sessions require Bridge's live binding plus a matching current runtime and terminal incarnation. Other connected agent terminals appear with their tab title, explicit unknown fields, and an incarnation-qualified identity until indexing catches up. Selection follows that transition when terminal and incarnation still match. Titles and folder names never establish conversation ownership.
 
-Activity is the newest provider/index update or agent-status timestamp supplied by Bridge. It is not a keystroke or terminal-output activity meter. Unknown timestamps sort last, with stable ID tie breaks. Grouped mode orders projects by their newest session and sessions within each project by activity. Colors derive from project identity and do not change with list position. Bridge history is bounded at 2000 sessions; a truncation warning stays visible, and unindexed live terminals remain included.
+Activity is the newest provider/index update or agent-status timestamp supplied by Bridge. It is not a keystroke or terminal-output activity meter. Unknown timestamps sort last, with stable ID tie breaks. Grouped mode orders projects alphabetically by name, ignoring case and comparing numbers naturally, with project ID tie breaks. This order is consistent across refreshes, filtering and restarts; activity only reorders sessions within a project. Flat mode orders all sessions by activity. Colors derive from project identity and do not change with list position. Bridge history is bounded at 2000 sessions; a truncation warning stays visible, and unindexed live terminals remain included.
 
 The shared cache contains display metadata, live terminal handles and session IDs, not transcripts. It resides in the signed app's private App Group container with owner-only file permissions. Runtime data, build directories, generated Xcode projects and local signing state are ignored by Git.
 

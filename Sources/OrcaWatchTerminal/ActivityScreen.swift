@@ -83,8 +83,9 @@ public struct ActivityScreen {
         foreground: muted))
     let view = navigation.grouped ? "grouped" : "flat"
     let filter = navigation.filter.isEmpty ? "" : "  /\(navigation.filter)"
+    let order = navigation.grouped ? "projects A–Z · sessions newest first" : "newest first"
     lines.append(
-      rule(" sessions\(filter) ", right: " \(view) · newest first ", width: width, top: true))
+      rule(" sessions\(filter) ", right: " \(view) · \(order) ", width: width, top: true))
     lines.append(tableHeader(layout))
     lines.append(divider(width: width))
     for position in 0..<capacity {
