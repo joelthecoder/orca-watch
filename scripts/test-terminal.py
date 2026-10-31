@@ -130,6 +130,9 @@ if sys.argv[1:3] == ['terminals', 'focus']:
     (root / 'focused').write_text(sys.argv[3])
     print('{}')
 else:
+    if (root / 'snapshot-error').exists():
+        print('Synthetic inventory outage', file=sys.stderr)
+        sys.exit(1)
     with (root / 'request-starts').open('a') as starts:
         starts.write(str(time.monotonic()) + '\\n')
     if (root / 'snapshot-delay').exists():
@@ -202,9 +205,23 @@ else:
         wait_for(master, lambda output: selected(output, "Task B"), timeout=0.4)
         assert time.monotonic() - started < 0.4, "Slow Bridge focus blocked navigation"
         assert "5s" in initial, "Default polling interval did not reduce background work"
+        (directory / "focused").unlink(missing_ok=True)
+        (directory / "snapshot-error").touch()
+        os.write(master, b"r")
+        wait_for(master, lambda output: "STALE" in output)
+        deadline = time.monotonic() + 3
+        while not (directory / "focused").exists() and time.monotonic() < deadline:
+            drain(master, 0.05)
+        assert (directory / "focused").exists(), "Slow focus did not complete"
+        drain(master, 0.15)
+        os.write(master, b"\x0c")
+        wait_for(master, lambda output: "STALE" in output, timeout=0.4)
+        os.write(master, b"\r\x0c")
+        wait_for(master, lambda output: "STALE" in output, timeout=0.4)
     finally:
         finish(process, master, slave, original)
         (directory / "focus-delay").unlink()
+        (directory / "snapshot-error").unlink(missing_ok=True)
 
     (directory / "request-starts").unlink(missing_ok=True)
     (directory / "snapshot-delay").write_text("0.8")

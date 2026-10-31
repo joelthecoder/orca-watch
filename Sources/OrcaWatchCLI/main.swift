@@ -155,9 +155,11 @@ func run(_ options: Options) throws {
     if let result = focusMailbox.take() {
       focusing = false
       needsRender = true
-      switch result {
-      case .success(let title): status = "Focused \(title)"
-      case .failure(let error): status = error.localizedDescription
+      if !status.hasPrefix("STALE") {
+        switch result {
+        case .success(let title): status = "Focused \(title)"
+        case .failure(let error): status = error.localizedDescription
+        }
       }
     }
     if !refreshing && !paused && Date() >= nextRefresh {
@@ -236,7 +238,7 @@ func run(_ options: Options) throws {
         {
           if !focusing {
             focusing = true
-            status = "Focusing \(selected.title)…"
+            if !status.hasPrefix("STALE") { status = "Focusing \(selected.title)…" }
             pending.enter()
             DispatchQueue.global(qos: .userInitiated).async {
               defer { pending.leave() }
